@@ -5,21 +5,111 @@ output:
     keep_md: true
 ---
 
+This summarizes the steps taken to perform analysis in the data for the **Activity monitoring data**.  The variables cointained in this data set are: 
+
+- **steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+- **date**: The date on which the measurement was taken in YYYY-MM-DD format
+- **interval**: Identifier for the 5-minute interval in which measurement was taken.
 
 ## Loading and preprocessing the data
 
+We load the data that has been stored is in the local working directory. 
+```{r loading}
+activity<-read.csv("activity.csv")
+activityN<-na.omit(activity)
+activityN<-transform(activityN,interval=factor(interval))
+head(activityN)
+```
 
 
 ## What is mean total number of steps taken per day?
+One can see the number of steps taken ecah dayin the following histogram:
+```{r histMeanStepDay}
+stepsperday<-with(activityN,tapply(steps,date,sum))
+hist(stepsperday,main=" Histogram of number of steps ",xlab = "Total number of steps per day")
+```
 
+The mean and the median number of steps is computed for each day: 
+```{r}
+Average<-with(activityN,tapply(steps,date,mean,na.rm=TRUE))
+Median1<-with(activityN,tapply(steps,date,median,na.rm=TRUE))
+d0<-data.frame(date=names(Average),mean=Average);
+d1<-data.frame(date=names(Average),median=Median1);
+mrg<-merge(d0,d1,by="date")
+mrg
+```
 
 
 ## What is the average daily activity pattern?
 
 
+We make a plot of the 5-minute interval (x-axis) and the average number of steps taken averaged across all days.
+
+```{r avNumStepDays}
+d2<-with(activityN,tapply(steps,interval,mean))
+d2<-data.frame(interval=as.integer(names(d2)),mean=d2);
+plot(d2$interval,d2$mean, type="l",main="Average number of steps per interval",xlab="interval",ylab="average")
+int<-which(d2$mean==max(d2$mean))
+```
+
+The maximum is achieved on the interval `r names(int)` in the position `r int` of the vector.
 
 ## Imputing missing values
 
+```{r}
+nm<-sum(is.na(activity))
+nmd<-sum(!complete.cases(mrg))
+```
+
+The total number of missing values in the data set is `r nm`, but there are `r nmd` where no data point is given.  Therefore the strategy that will be used to fill in the missing values is to replace them by the mean for the respective interval.
+
+A new data set is created with the values filled in.
+
+```{r HistImputedStepsPerDay}
+Iactivity=activity
+for (i in 1:nrow(Iactivity)){
+    if (is.na(Iactivity[i,]$steps))
+    {
+       inter<-Iactivity$interval[i]
+       Iactivity[i,]$steps<-d2[d2$interval==inter,]$mean
+    }
+}
+Istepsperday<-with(Iactivity,tapply(steps,date,sum))
+hist(Istepsperday,main=" Histogram of number of steps (completed) ",xlab = "Total number of steps per day")
+
+IAverage<-with(Iactivity,tapply(steps,date,mean))
+IMedian1<-with(Iactivity,tapply(steps,date,median))
+Id0<-data.frame(date=names(IAverage),mean.imputed=IAverage);
+Id1<-data.frame(date=names(IAverage),median.imputed=IMedian1);
+Imrg<-merge(Id0,Id1,by="date")
+cmrg<-merge(mrg,Imrg,by="date")
+cmrg
+summary(cmrg)
+```
+ One can see that this has a tremendous impact on the number of steps, specially on the median values which is 0 for all other days where it not needed to ocmplete the data.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We use the filled data frame but we create a new factor variable with the day of the week.
+```{r}
+Iactivity$day=weekdays(as.POSIXlt(Iactivity$date))
+Iactivity$W<-rep("weekday",nrow(Iactivity))
+Iactivity[Iactivity$day=="Sunday",]$W<-"weekend"
+Iactivity[Iactivity$day=="Saturday",]$W<-"weekend"
+Iactivity<-transform(Iactivity,W=factor(W))
+gbwe<-subset(Iactivity,W=="weekend")
+gbwd<-subset(Iactivity,W=="weekday")
+```
+
+We compute the average number of steps taken during the weekdays and the weekends and compare then in a plot.
+
+```{r Compare}
+gbwdd2<-with(gbwd,tapply(steps,interval,mean))
+gbwdd2<-data.frame(interval=as.integer(names(gbwdd2)),mean=gbwdd2);
+gbwed2<-with(gbwe,tapply(steps,interval,mean))
+gbwed2<-data.frame(interval=as.integer(names(gbwed2)),mean=gbwed2);
+par(mfrow=c(2,1))
+plot(gbwed2$interval,gbwed2$mean, type="l",main="weekend",xlab=" ",ylab="avg num steps")
+plot(gbwdd2$interval,gbwdd2$mean, type="l",main="weekday",xlab="interval",ylab="avg num steps")
+```
